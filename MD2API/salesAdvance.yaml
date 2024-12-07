@@ -1,0 +1,197 @@
+openapi: 3.0.0
+info:
+  title: API for retrieveSales
+  version: 1.0.0
+  description: Generated API specification from salesAdvance.md.
+servers:
+  - url: http://localhost:8080/
+paths:
+  /sales/{userAccount}:
+    post:
+      tags:
+        - Sales
+      summary: retrieveSales
+      description: Permite Consultar las Metas.
+      operationId: retrieveSales
+      parameters:
+        - name: sellerIdentification.nationalIdType
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Tipo de documento del vendedor
+        - name: sellerIdentification.nationalId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Documento del vendedor
+        - name: additionalData
+          in: query
+          required: false
+          schema:
+            type: string
+            example: value1, value2...
+          description: Informacion adicional
+        - name: customerIdentification
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/legalId"
+          description: Objeto legalId del Cliente
+        - name: userAccount
+          in: path
+          required: true
+          schema:
+            type: string
+            example: jaimito
+          description: ID del usuario que realiza la acción
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Request"
+        required: true
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Response"
+components:
+  schemas:
+    Request:
+      type: object
+      properties:
+        jiraAttribute:
+          type: string
+          example: summary
+          description: Nombre del campo en Jira
+        soapAttribute:
+          type: string
+          example: A_CHANNEL_PLAT
+          description: Nombre del atributo del outbound de TOA
+        typeId:
+          type: number
+          example: "1"
+          description: ID tipo de integración entre TOA y Jira
+        jiraFieldType:
+          type: number
+          example: string
+          description: Tipo de campo en Jira [string,singleList]
+        goals:
+          $ref: "#/components/schemas/Goals"
+        sellerIdentification:
+          $ref: "#/components/schemas/legalId"
+          description: Objeto legalId del Vendedor
+      required:
+        - jiraAttribute
+        - soapAttribute
+        - typeId
+        - jiraFieldType
+        - sellerIdentification
+    Response:
+      type: object
+      properties:
+        sellerIdentification:
+          $ref: "#/components/schemas/legalId"
+          description: Objeto legalId del Vendedor
+        salesAdvance:
+          type: array
+          items:
+            $ref: "#/components/schemas/salesAdvance"
+      required:
+        - sellerIdentification
+    salesAdvance:
+      type: object
+      properties:
+        category:
+          type: string
+          description: La Categoría
+        type:
+          type: number
+        dateSeller:
+          type: string
+          format: date-time
+        general:
+          $ref: "#/components/schemas/GeneralInfo"
+        goals:
+          $ref: "#/components/schemas/Goals"
+          example: N/A
+        throttle:
+          $ref: "#/components/schemas/throttle"
+        additionalData:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdditionalData"
+      required:
+        - category
+    GeneralInfo:
+      type: object
+      properties:
+        code:
+          type: number
+        product:
+          type: string
+        operation:
+          type: string
+        mode:
+          type: string
+        plan:
+          type: string
+        message:
+          type: string
+    Goals:
+      type: object
+      properties:
+        value:
+          type: number
+        hoardSale:
+          type: number
+        conRecharge:
+          type: number
+        cuantityRecharge:
+          type: number
+        updateDate:
+          type: string
+          format: date-time
+    throttle:
+      type: object
+      properties:
+        goal:
+          type: number
+        validityStart:
+          type: string
+        validityEnd:
+          type: string
+        hoardSale:
+          type: number
+        conRecharge:
+          type: number
+        cuantityRecharge:
+          type: number
+        updateDate:
+          type: string
+          format: date
+    legalId:
+      type: object
+      properties:
+        nationalIdType:
+          type: string
+          example: DNI
+          description: tipo de documento
+        nationalId:
+          type: string
+          example: "76230172"
+          description: Numero de documento de identidad.
+      required:
+        - nationalIdType
+        - nationalId
+    AdditionalData:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: string

@@ -117,9 +117,13 @@ def parse_definitions_section(md_content):
                 # Añadir ejemplo si existe y no es "NA"
                 if ejemplo and ejemplo.upper() != "NA":
                     prop_schema["example"] = ejemplo
-                
+
                 # Añadir descripción si existe y no está vacía
-                if descripcion and descripcion.upper() != "NA" and descripcion.upper() != "N/A":
+                if (
+                    descripcion
+                    and descripcion.upper() != "NA"
+                    and descripcion.upper() != "N/A"
+                ):
                     prop_schema["description"] = descripcion
 
                 # Marcar campos obligatorios si es necesario
@@ -178,7 +182,7 @@ def extract_purpose(md_content):
         return None
 
 
-def parse_markdown_tables(md_content):
+def parse_request_section(md_content):
     sections = {}
     current_section = None
     current_subsection = None
@@ -191,7 +195,7 @@ def parse_markdown_tables(md_content):
             sections[current_section] = {}
             continue
 
-        # Detecta subsecciones (Ej. "Query Parameter", "Body Parameters")
+        # Detecta subsecciones (Ej. "Query Parameter", "Body Parameters", "Path Parameters")
         subsection_match = re.match(r"^### (.+)", line)
         if subsection_match and current_section:
             current_subsection = subsection_match.group(1)
@@ -208,6 +212,7 @@ def parse_markdown_tables(md_content):
                     sections[current_section][current_subsection].append(row)
 
     return sections
+
 
 # Función para extraer la respuesta de la sección "Respuesta"
 def parse_response_section(md_content, definitions_map):
@@ -314,6 +319,7 @@ def parse_response_section(md_content, definitions_map):
             response_schema["required"] = required_fields
     return response_schema
 
+
 # Función que permite crear un OAS básico
 def generate_openapi_spec_from_md(
     file_name,
@@ -324,13 +330,123 @@ def generate_openapi_spec_from_md(
     response_schema,
     summary,
     tags,
+    definitions_map,
 ):
-    # Extrae parámetros de Path y Body
+    # Extrae parámetros de Path, Query y Body
     path_params = sections.get("Petición", {}).get("Path Parameter", [])[1:]
-    # Extrae parámetros de Query y Body
     query_params = sections.get("Petición", {}).get("Query Parameter", [])[1:]
-    # Omite el encabezado
     body_params = sections.get("Petición", {}).get("Body Parameters", [])[1:]
+
+    # Función auxiliar para mapear el tipo, similar a lo hecho en response y definiciones
+    def map_param_type(param_type, definitions_map):
+        # Detectar referencias a objetos
+        array_ref_match = re.match(
+            r"\[([A-Za-z0-9_]+)\[\]\]\(#([A-Za-z0-9_]+)\)", param_type, re.IGNORECASE
+        )
+        object_ref_match = re.match(
+            r"\[([A-Za-z0-9_]+)\]\(#([A-Za-z0-9_]+)\)", param_type, re.IGNORECASE
+        )
+
+        if array_ref_match:
+            # array de objetos
+            ref_name = array_ref_match.group(2).lower()
+            if definitions_map and ref_name in definitions_map:
+                ref_name = definitions_map[ref_name]
+            return {
+                "type": "array",
+                "items": {"$ref": f"#/components/schemas/{ref_name}"},
+            }
+
+        if object_ref_match:
+            # objeto definido
+            ref_name = object_ref_match.group(2).lower()
+            if definitions_map and ref_name in definitions_map:
+                ref_name = definitions_map[ref_name]
+            return {"$ref": f"#/components/schemas/{ref_name}"}
+
+        # Si no es una referencia, asumimos un tipo primitivo
+        param_type = param_type.lower()
+        if param_type not in ["string", "number", "integer", "boolean"]:
+            param_type = "string"  # fallback a string
+        return {"type": param_type}
+
+    # Función para procesar los parámetros (Query, Path, Body)
+    # param es una fila de la tabla: [campo, tipo, ejemplo, descripción, obligatoriedad]
+    def process_param(param, definitions_map):
+        campo, tipo, ejemplo, descripcion, obligatoriedad = param
+        campo = campo.strip()
+        tipo = tipo.strip()
+        ejemplo = ejemplo.strip()
+        descripcion = descripcion.strip()
+        obligatoriedad = obligatoriedad.strip()
+
+        # Mapear el tipo
+        property_schema = map_param_type(tipo, definitions_map)
+
+        # Añadir example si no es NA ni vacío
+        if ejemplo and ejemplo.upper() != "NA":
+            property_schema["example"] = ejemplo
+
+        # Determinar si es obligatorio
+        is_required = obligatoriedad.lower() == "obligatorio"
+
+        return campo, property_schema, is_required, descripcion
+
+    # Procesar Query y Path params para 'parameters'
+    # Estos van a ir en "parameters" de paths
+    parameters = []
+    for param in query_params:
+        campo, schema, is_required, param_description = process_param(
+            param, definitions_map
+        )
+        parameter_obj = {
+            "name": campo,
+            "in": "query",
+            "required": is_required,
+            "schema": schema,
+        }
+        # Si hay descripción, agregarla al parámetro
+        if param_description and param_description.upper() != "NA":
+            parameter_obj["description"] = param_description
+        parameters.append(parameter_obj)
+
+    for param in path_params:
+        campo, schema, is_required, param_description = process_param(
+            param, definitions_map
+        )
+        parameter_obj = {
+            "name": campo,
+            "in": "path",
+            "required": is_required,
+            "schema": schema,
+        }
+        # Si hay descripción, agregarla al parámetro
+        if param_description and param_description.upper() != "NA":
+            parameter_obj["description"] = param_description
+        parameters.append(parameter_obj)
+
+    # Procesar Body params para 'Request' schema
+    body_properties = {}
+    required_fields = []
+    for param in body_params:
+        campo, schema, is_required, param_description = process_param(
+            param, definitions_map
+        )
+        # Aquí sí queremos que la descripción quede en el schema
+        if param_description and param_description.upper() != "NA":
+            schema["description"] = param_description
+
+        body_properties[campo] = schema
+        if is_required:
+            required_fields.append(campo)
+
+    request_schema = {
+        "type": "object",
+        "properties": body_properties,
+    }
+
+    if required_fields:
+        request_schema["required"] = required_fields
 
     openapi_spec = {
         "openapi": "3.0.0",
@@ -347,42 +463,7 @@ def generate_openapi_spec_from_md(
                     "summary": operation_name,
                     "description": summary or "Detailed description not available.",
                     "operationId": operation_name,
-                    "parameters": (
-                        (
-                            [
-                                {
-                                    "name": param[0],
-                                    "in": "query",
-                                    "required": param[4].lower() == "obligatorio",
-                                    "description": param[3],
-                                    "schema": {
-                                        "type": param[1].lower(),
-                                        "example": param[2],
-                                    },
-                                }
-                                for param in query_params
-                            ]
-                            if query_params
-                            else []
-                        )
-                        + (
-                            [
-                                {
-                                    "name": param[0],
-                                    "in": "path",
-                                    "required": param[4].lower() == "obligatorio",
-                                    "description": param[3],
-                                    "schema": {
-                                        "type": param[1].lower(),
-                                        "example": param[2],
-                                    },
-                                }
-                                for param in path_params
-                            ]
-                            if path_params
-                            else []
-                        )
-                    ),
+                    "parameters": parameters,
                     "requestBody": {
                         "content": {
                             "application/json": {
@@ -406,17 +487,7 @@ def generate_openapi_spec_from_md(
         },
         "components": {
             "schemas": {
-                "Request": {
-                    "type": "object",
-                    "properties": {
-                        param[0]: {
-                            "type": param[1].lower(),
-                            "example": param[2],
-                            "description": param[3],
-                        }
-                        for param in body_params
-                    },
-                },
+                "Request": request_schema,
                 "Response": response_schema,
             }
         },
@@ -441,13 +512,11 @@ def process_md_files_in_directory(directory="."):
         if file_name.endswith(".md"):
             with open(file_name, "r", encoding="utf-8") as file:
                 md_content = file.read()
-            sections = parse_markdown_tables(md_content)
+            sections = parse_request_section(md_content)
             definitions_schemas = parse_definitions_section(md_content)
             # Guardamos los nombres originales de las referencias de las definiciones
             definitions_map = {d.lower(): d for d in definitions_schemas.keys()}
             response_schema = parse_response_section(md_content, definitions_map)
-
-            # Llama a la función extract_purpose para obtener summary
             summary = extract_purpose(md_content)
             print(f"Procesando archivo: {file_name}")
             operation_type = (
@@ -467,6 +536,7 @@ def process_md_files_in_directory(directory="."):
                 response_schema,
                 summary,
                 tags,
+                definitions_map,
             )
 
             # Actualizar los schemas con las definiciones parseadas

@@ -3,7 +3,7 @@
 | **Campo** | **Valor** | **Descripción** |
 | --- | --- | --- |
 | Propósito | Permite Consultar las Metas. |
-| Recurso | [GET]/salesAdvance | Un recurso está asociado al objeto o entidad que se requiere consultar, modificar, actualizar o eliminar. Enlace de referencia [URIs](https://ad-tdp.azurewebsites.net/lineamientos/gobierno-api/lineamiento#4-5-uris). | 
+| Recurso | [POST]/salesAdvance | Un recurso está asociado al objeto o entidad que se requiere consultar, modificar, actualizar o eliminar. Enlace de referencia [URIs](https://ad-tdp.azurewebsites.net/lineamientos/gobierno-api/lineamiento#4-5-uris). | 
 | Sub-recurso | NA | Un sub-recurso tiene relación con respecto a un recurso, se puede interpretar como un parte-todo de un objeto. Enlace de referencia [URIs](https://ad-tdp.azurewebsites.net/lineamientos/gobierno-api/lineamiento#4-5-uris). |
 
 # Petición
@@ -13,6 +13,20 @@
 | sellerIdentification.nationalIdType | string | NA | Tipo de documento del vendedor | Obligatorio |
 | sellerIdentification.nationalId | string | NA | Documento del vendedor | Obligatorio |
 | additionalData | string | value1, value2... | Informacion adicional | Opcional |
+| customerIdentification | [LegalId](#legalid) | NA | Objeto legalId del Cliente | Obligatorio |
+### Body Parameters
+| **Campo** | **Tipo** | **Ejemplo** | **Descripción** | **Obligatoriedad** |
+| --- | --- | --- | --- | --- |
+| jiraAttribute | string | summary | Nombre del campo en Jira | Obligatorio |
+| soapAttribute | string | A_CHANNEL_PLAT | Nombre del atributo del outbound de TOA | Obligatorio |
+| typeId | number | 1 | ID tipo de integración entre TOA y Jira | Obligatorio |
+| jiraFieldType | number | string | Tipo de campo en Jira [string,singleList] | Obligatorio |
+| goals | [Goals](#goals) | NA |  | Opcional |
+| sellerIdentification | [LegalId](#legalid) | NA | Objeto legalId del Vendedor | Obligatorio |
+### Path Parameter
+| **Campo** | **Tipo** | **Ejemplo** | **Descripción** | **Obligatoriedad** |
+| --- | --- | --- | --- | --- |
+| userAccount | string | jaimito | ID del usuario que realiza la acción | Obligatorio |
 
 # Respuesta
 | **Campo** | **Tipo** | **Ejemplo** | **Descripción** | **Obligatoriedad** |
